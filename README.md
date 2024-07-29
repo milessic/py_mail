@@ -3,6 +3,6 @@ Simple Python gmail client
 
 
 # ROADMAP
-[ ] inbox
-[ ] windows support
-[ ] attachments
+- [ ] inbox
+- [ ] windows support
+- [ ] attachments
