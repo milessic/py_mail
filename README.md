@@ -1,2 +1,8 @@
 # py_mail
-Simple Python gmail SMTP client
+Simple Python gmail client
+
+
+# ROADMAP
+[ ] inbox
+[ ] windows support
+[ ] attachments
