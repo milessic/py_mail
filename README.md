@@ -6,3 +6,5 @@ Simple Python gmail client
 - [ ] inbox
 - [ ] windows support
 - [ ] attachments
+- [ ] favorites hadnling for headless instance
+- [ ] adding keyword arguments for headless instance
