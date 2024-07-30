@@ -5,6 +5,7 @@ Simple Python gmail client
 # Usage
 > [!WARNING]
 > Before first run, config file should be created under ``$HOME/.pymail.conf``!
+
 pymail can be run either headless or with CLI:
 
 ```bash
