@@ -7,11 +7,38 @@ from email.mime.multipart import MIMEMultipart
 import os
 
 class MailClient:
-    def __init__(self, credentials, config, silent:bool=False):
-        if not silent:
-            print("Loading py_mail....")
-        self.credentials = credentials
-        self.config = config
+    def __init__(self, credentials, config, silent:bool=False, initialize_mail:bool=True):
+        self.debug = True
+        self.silent = silent
+        self.initialize_mail = initialize_mail
+        if initialize_mail:
+            if not silent:
+                print("Loading py_mail....")
+            self.credentials = credentials
+            self.config = config
+            # setup smtp
+            try:
+                # print("Starting server...")
+                self.s = smtplib.SMTP(self.config["smtp"]["server"],
+                                       self.config["smtp"]["port"],
+                                      timeout=self.config["smtp"]["timeout"]
+                                      )
+                self.s.starttls()
+                self.s.ehlo()
+                self.s.login(self.credentials.login, self.credentials.password) # print("Server started!")
+            except Exception as e:
+                print(f"""server: '{self.config["smtp"]["server"]}'.""")
+                raise AssertionError(f"\33[41mError when connecting to SMTP server! {type(e).__name__}: {e}\33[0m")
+        # setup pop3
+            try:
+                self.p = poplib.POP3_SSL(self.config["pop3"]["host"], self.config["pop3"]["port"])
+                self.p.user(self.credentials.login)
+                self.p.pass_(self.credentials.password)
+            except Exception as e:
+                print(f"""server: '{self.config["pop3"]["server"]}'.""")
+                raise AssertionError(f"\33[41mError when connecting to POP3 server! {type(e).__name__}: {e}\33[0m")
+
+        # Open Favorites
         self.favorites_file = f"{os.getenv('HOME')}/.pymail_favorites.json"
         try:
             with open(self.favorites_file, "r") as f:
@@ -24,35 +51,16 @@ class MailClient:
             if not silent:
                 print("\33[38;1;91mCould not load 'favorites.json'!\33[0m")
                 print(e)
-        # setup smtp
-        try:
-            # print("Starting server...")
-            self.s = smtplib.SMTP(self.config["smtp"]["server"],
-                                   self.config["smtp"]["port"],
-                                  timeout=self.config["smtp"]["timeout"]
-                                  )
-            self.s.starttls()
-            self.s.ehlo()
-            self.s.login(self.credentials.login, self.credentials.password) # print("Server started!")
-        except Exception as e:
-            print(f"""server: '{self.config["smtp"]["server"]}'.""")
-            raise AssertionError(f"\33[41mError when connecting to SMTP server! {type(e).__name__}: {e}\33[0m")
-        # setup pop3
-        try:
-            self.p = poplib.POP3_SSL(self.config["pop3"]["host"], self.config["pop3"]["port"])
-            self.p.user(self.credentials.login)
-            self.p.pass_(self.credentials.password)
-        except Exception as e:
-            print(f"""server: '{self.config["pop3"]["server"]}'.""")
-            raise AssertionError(f"\33[41mError when connecting to POP3 server! {type(e).__name__}: {e}\33[0m")
 
     def __del__(self):
+        if not self.initialize_mail:
+            return
         try:
             self.s.quit()
             print("Server connection closed...")
         except AttributeError:
             pass
-        except Exception as e:
+        except Exception:
             pass
 
     def show_favorites(self):
@@ -96,6 +104,19 @@ class MailClient:
             print(e)
             self.press_enter()
 
+    def _fetch_from_favorites(self, name:str) -> str:
+        try:
+            return self.favorites[name]
+        except KeyError:
+            raise KeyError(f"Could not find '{name}' in favorites!")
+
+    def _fetch_all_favorites(self) -> list:
+        data = []
+        for a,m in self.favorites.items():
+            data.append({"alias":a, "mail":m})
+        return data
+
+
     def _setup_message(self, to, subject, content) -> MIMEMultipart:
         msg = MIMEMultipart()
         msg["Subject"] = subject
@@ -111,14 +132,18 @@ class MailClient:
     def send_mail(self):
         try:
             print("\33[38;1;96m=== SEND NEW MAIL\33[0m")
+            self.deb("Creating message..")
             msg = MIMEMultipart()
             msg["Subject"] = input("\33[38;92mSUBJECT >>>\33[0m ")
             recipients_raw = input("\33[38;92mRECIPIENTS >>>\33[0m ").split(",")
             recipients = ",".join([self.favorites[r] if r in self.favorites else r for r in recipients_raw])
+            self.deb("set recipients")
 
             msg["To"] = recipients
             msg.attach(MIMEText(self.collect_multiline("\33[92mTYPE BODY:"), "plain"))
-            self._send_mail(msg.as_string())
+            self.deb("Sending mail...")
+            self._send_mail(msg)
+            self.deb("Sent mail...")
             print("\33[38;1;92mMail sent!\33[0m")
             print(f"recipients: {recipients}")
             self.press_enter()
@@ -172,6 +197,9 @@ class MailClient:
             print(f"- {m['from']}\t\t {m['subject']}")
 
 
+    def deb(self, msg):
+        if self.debug:
+            print(msg)
 
 """
 # Gmail POP3 server details
