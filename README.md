@@ -25,10 +25,10 @@ Config files are stored under ``$HOME/.pymail.conf``
 - [ ] full windows support
 - [ ] attachments
 - [ ] favorites hadnling for headless instance
--- [x] fetching
--- [x] listing
--- [ ] setting
--- [ ] deleting
+  - [x] fetching
+  - [x] listing
+  - [ ] setting
+  - [ ] deleting
 - [ ] adding keyword arguments for headless instance
 - [ ] add templates
 - [ ] script / interface to create config
