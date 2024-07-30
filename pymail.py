@@ -62,6 +62,7 @@ if start:
                 "port":995
                 }
             }
+    # CLI
     if "--interface" in sys.argv or "-i" in sys.argv:
         m = MailClient(creds, config)
         while start:
@@ -89,12 +90,14 @@ if start:
                 clear()
             except (KeyboardInterrupt, EOFError):
                 break
+    # list facorites
     elif "--list-favorites" in sys.argv:
-        m = MailClient(creds, config, initialize_mail=False, silent=is_silent)
+        m = MailClient(creds, config, initialize_smtp=False, initialize_pop3=False, silent=is_silent)
         data = m._fetch_all_favorites()
         print(tabulate(data, headers="keys"))
+    # headless
     else:
-        m = MailClient(creds, config, silent=is_silent)
+        m = MailClient(creds, config, silent=is_silent, initialize_pop3=False)
         try:
             # set to
             if sys.argv[1].startswith("-f"):

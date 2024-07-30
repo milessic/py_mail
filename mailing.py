@@ -7,15 +7,18 @@ from email.mime.multipart import MIMEMultipart
 import os
 
 class MailClient:
-    def __init__(self, credentials, config, silent:bool=False, initialize_mail:bool=True):
-        self.debug = True
+    def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_pop3:bool=True):
+        self.debug = False
         self.silent = silent
-        self.initialize_mail = initialize_mail
-        if initialize_mail:
+        self.initialize_smtp = initialize_smtp 
+        self.initialize_pop3 = initialize_pop3
+        self.initialize_credentials = self.initialize_smtp or self.initialize_pop3
+        if self.initialize_credentials:
             if not silent:
                 print("Loading py_mail....")
             self.credentials = credentials
             self.config = config
+        if initialize_smtp:
             # setup smtp
             try:
                 # print("Starting server...")
@@ -30,6 +33,7 @@ class MailClient:
                 print(f"""server: '{self.config["smtp"]["server"]}'.""")
                 raise AssertionError(f"\33[41mError when connecting to SMTP server! {type(e).__name__}: {e}\33[0m")
         # setup pop3
+        if initialize_pop3:
             try:
                 self.p = poplib.POP3_SSL(self.config["pop3"]["host"], self.config["pop3"]["port"])
                 self.p.user(self.credentials.login)
@@ -53,7 +57,7 @@ class MailClient:
                 print(e)
 
     def __del__(self):
-        if not self.initialize_mail:
+        if not self.initialize_smtp:
             return
         try:
             self.s.quit()
