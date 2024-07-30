@@ -1,20 +1,54 @@
+import re
 import json
+import re
+import readline
+from tabulate import tabulate
 import poplib
-from email import parser
+import imaplib
+from email import message_from_bytes
+from email.header import decode_header, make_header
 import smtplib 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 
+def clear():
+    os.system("cls" if os.name=="nt" else "clear")
+
+class Style:
+    # classes
+    b = "\33[1m"
+    i = "\33[3m"
+    err = "\33[38;1;41m"
+    warn = "\33[38;1;93m"
+    # colors
+    deep_green = "\33[38;1;96m"
+    green = "\33[92m"
+    endc = "\33[0m"
+
+class Credentials:
+    def __init__(self, login, password):
+        self.login = login
+        self.password = password
+
+    def __str__(self):
+        return f"{self.login}, ******"
+    def __repr__(self):
+        return f"{self.login}, ******"
+
 class MailClient:
     def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_pop3:bool=True):
+        self.messages = {}
+        self.message_counts = {}
         self.debug = False
         self.silent = silent
         self.initialize_smtp = initialize_smtp 
-        self.initialize_pop3 = initialize_pop3
+        self.initialize_pop3 = False   #initialize_pop3
+        self.initialize_imap = initialize_pop3
         self.initialize_credentials = self.initialize_smtp or self.initialize_pop3
         if self.initialize_credentials:
             if not silent:
+                clear()
                 print("Loading py_mail....")
             self.credentials = credentials
             self.config = config
@@ -31,7 +65,15 @@ class MailClient:
                 self.s.login(self.credentials.login, self.credentials.password) # print("Server started!")
             except Exception as e:
                 print(f"""server: '{self.config["smtp"]["server"]}'.""")
-                raise AssertionError(f"\33[41mError when connecting to SMTP server! {type(e).__name__}: {e}\33[0m")
+                raise AssertionError(f"{Style.err}Error when connecting to SMTP server! {type(e).__name__}: {e}{Style.endc}")
+        # setup IMAP
+        if self.initialize_imap:
+            try:
+                self.i = imaplib.IMAP4_SSL("imap.gmail.com")
+                self.i.login(user=self.credentials.login, password=self.credentials.password)
+            except Exception as e:
+                print(f"{Style.err}Error connecting to IMAP server! {type(e).__name__}: {e}{Style.endc}")
+                input("Press ENTER to continue")
         # setup pop3
         if initialize_pop3:
             try:
@@ -40,7 +82,7 @@ class MailClient:
                 self.p.pass_(self.credentials.password)
             except Exception as e:
                 print(f"""server: '{self.config["pop3"]["server"]}'.""")
-                raise AssertionError(f"\33[41mError when connecting to POP3 server! {type(e).__name__}: {e}\33[0m")
+                raise AssertionError(f"{Style.err}Error when connecting to POP3 server! {type(e).__name__}: {e}{Style.endc}")
 
         # Open Favorites
         self.favorites_file = f"{os.getenv('HOME')}/.pymail_favorites.json"
@@ -53,7 +95,7 @@ class MailClient:
                 self.favorites = {}
         except Exception as e:
             if not silent:
-                print("\33[38;1;91mCould not load 'favorites.json'!\33[0m")
+                print("{Style.err}Could not load 'favorites.json'!{Style.endc}")
                 print(e)
 
     def __del__(self):
@@ -61,14 +103,15 @@ class MailClient:
             return
         try:
             self.s.quit()
-            print("Server connection closed...")
+            if not self.silent:
+                print("Server connection closed...")
         except AttributeError:
             pass
         except Exception:
             pass
 
     def show_favorites(self):
-        print("\33[38;1;96m=== FAVORITES\33[0m")
+        print(f"{Style.deep_green}=== FAVORITES{Style.endc}")
         if not len(self.favorites):
             print("\t-no favorites added")
         for k,v in self.favorites.items():
@@ -76,26 +119,26 @@ class MailClient:
         self.press_enter()
     
     def add_to_favorites(self):
-        print("\33[38;1;96m=== ADD FAVORITES\33[0m")
-        mail = input("MAIL ADDRESS >>>\33[0m ")
-        alias = input("ALIAS >>>\33[0m ")
+        print("f{Style.deep_green}=== ADD FAVORITES{styles.endc}")
+        mail = input(f"MAIL ADDRESS >>>{Style.endc} ")
+        alias = input(f"ALIAS >>>{Style.endc} ")
         confirm = True if input(f"Mail: '{mail}', alias: '{alias}'\nDo you confirm? y/n ").lower().startswith("y") else False
         if confirm:
-            print(f"\33[38;92m{alias} added to Favorites.\33[0m")
+            print(f"{Style.deep_green}{alias} added to Favorites.{Style.endc}")
             self.favorites[alias] = mail
         self.save_favorites()
         self.press_enter()
 
     def remove_from_favorites(self):
-        print("\33[38;1;96m=== REMOVE FAVORITES\33[0m")
-        alias = input("ALIAS TO REMOVE >>>\33[0m ")
+        print("{Style.deep_green}=== REMOVE FAVORITES{Style.endc}")
+        alias = input("ALIAS TO REMOVE >>>{Style.endc} ")
         if alias not in self.favorites:
-            print(f"\33[38;93mThere are no '{alias}' in FAVORITES!\33[0m")
+            print(f"{Style.deep_green}There are no '{alias}' in FAVORITES!{Style.endc}")
             self.press_enter()
             return
         confirm = True if input(f"Mail: '{self.favorites[alias]}', alias: '{alias}'\nDo you confirm deletion? y/n ").lower().startswith("y") else False
         if confirm:
-            print(f"\33[38;93m{alias} deleted from Favorites.\33[0m")
+            print(f"{Style.warn}{alias} deleted from Favorites.{Style.endc}")
             del self.favorites[alias]
         self.save_favorites()
         self.press_enter()
@@ -135,35 +178,35 @@ class MailClient:
 
     def send_mail(self):
         try:
-            print("\33[38;1;96m=== SEND NEW MAIL\33[0m")
+            print(f"{Style.deep_green}=== SEND NEW MAIL{Style.endc}")
             self.deb("Creating message..")
             msg = MIMEMultipart()
-            msg["Subject"] = input("\33[38;92mSUBJECT >>>\33[0m ")
-            recipients_raw = input("\33[38;92mRECIPIENTS >>>\33[0m ").split(",")
+            msg["Subject"] = input(f"{Style.deep_green}SUBJECT >>>{Style.endc} ")
+            recipients_raw = input(f"{Style.deep_green}RECIPIENTS >>>{Style.endc} ").split(",")
             recipients = ",".join([self.favorites[r] if r in self.favorites else r for r in recipients_raw])
             self.deb("set recipients")
 
             msg["To"] = recipients
-            msg.attach(MIMEText(self.collect_multiline("\33[92mTYPE BODY:"), "plain"))
+            msg.attach(MIMEText(self.collect_multiline(f"{Style.green}TYPE BODY:"), "plain"))
             self.deb("Sending mail...")
             self._send_mail(msg)
             self.deb("Sent mail...")
-            print("\33[38;1;92mMail sent!\33[0m")
+            print(f"{Style.deep_green}Mail sent!{Style.endc}")
             print(f"recipients: {recipients}")
             self.press_enter()
         except Exception as e:
-            print(f"\33[38;1;91mCould not send mail due to:\33[0m\n\33[38;93m{type(e).__name__}: {e}")
+            print(f"{Style.err}Could not send mail due to:{Style.endc}\n{Style.warn}{type(e).__name__}: {e}{Style.endc}")
             self.press_enter()
             return
     
     def collect_multiline(self, msg):
         print(msg)
-        x = input(">>>\33[0m ")
+        x = input(f">>>{Style.endc} ")
         inputs = []
         reset_c = 0
         while reset_c < 2:
             inputs.append(x)
-            x = input("\33[92m>>>\33[0m ")
+            x = input(f"{Style.green}>>>{Style.endc} ")
             if x == "":
                 reset_c += 1
             else:
@@ -188,59 +231,69 @@ class MailClient:
         input("Press ENTER to continue...")
 
     def show_inbox(self):
+        clear()
         print("=== INBOX")
-        all_messages = [self.p.retr(i+1)[1] for i in range(self.get_number_of_mails())]
-        print(all_messages[2][0])
-        print(all_messages[2][1])
-        print(all_messages[2][3])
-        input()
-        max_on_page = 30 
-        messages = max_on_page if max_on_page > self.get_number_of_mails() else self.get_number_of_mails()
-        msgs = [self.p.retr(0)]
-        for m in msgs:
-            print(f"- {m['from']}\t\t {m['subject']}")
+        self._fetch_emails_imap()
+        print(tabulate(self.messages, headers="keys"))
+        inbox_input = input("[0] Read {Num} - [1] Reply {Num} - [2] Reload - [9] Exit\n>>> ")
+        match inbox_input.upper():
+            case "0" | "READ":
+                self.not_implemented()
+                self.show_inbox()
+            case "1" | "REPLY":
+                self.not_implemented()
+                self.show_inbox()
+            case "2" | "RELOAD":
+                self._fetch_emails_imap(hard=True)
+                self.show_inbox()
+            case "9" | "EXIT":
+                return
+    
+    def _get_number_of_mails(self) -> dict:
+        if self.message_counts == {}:
+            self._fetch_emails_imap()
+        return self.message_counts
 
+    def _fetch_emails_imap(self, hard:bool=False):
+        if len(self.messages) != 0:
+            if not hard:
+                return
+        print("Looking for new mails...")
+        status, messages = self.i.select('INBOX')    
+        if status != "OK": exit("Incorrect mail box")
+        
+        msg_count = {"all":0, "unread":0}
+        msgs = []
+        msg_i = 0
+        for i in range(1, int(messages[0]) + 1):
+            #res, msg = self.i.fetch(str(i), '(RFC822 FLAGS)')  RFC822 makrs msgs Seen
+            res, msg = self.i.fetch(str(i), '(BODY.PEEK[] FLAGS)')
+            if res != "OK":
+                continue
+            for response in msg:
+                if isinstance(response, tuple):
+                    msg = message_from_bytes(response[1])
+                    res, flag_data = self.i.fetch(str(i), '(FLAGS)')
+                    msg_flags = flag_data[0].decode()
+                    msg_seen = '\\Seen' in msg_flags
+                    if not msg_seen:
+                        msg_count["unread"] +=1
+                    msg_count["all"] += 1
+                    msg_subject = f"{Style.endc if msg_seen else Style.b}" + msg["Subject"] + Style.endc
+                    msg_from = msg["From"]
+                    decoded_msg_from = str(make_header(decode_header(msg_from)))
+                    decoded_msg_from = re.sub(r"(<)([\s\S])*", "", decoded_msg_from)
+                    msgs.append({"Num": msg_i,"Subject": msg_subject, "From": decoded_msg_from})
+                    msg_i += 1
+        self.messages = msgs
+        self.message_counts = msg_count
 
     def deb(self, msg):
         if self.debug:
             print(msg)
 
-"""
-# Gmail POP3 server details
-HOST = 'pop.gmail.com'
-PORT = 995
+    def not_implemented(self, msg:str=""):
+        input(Style.warn + "Not implemented! press ENTER to continue" + msg + Style.endc)
 
-# User credentials
-USER = 'your-email@gmail.com'
-PASSWORD = 'your-email-password'  # Use an app-specific password if you have 2FA enabled
-
-def fetch_emails():
-    # Connect to the server
-    pop_conn = poplib.POP3_SSL(HOST, PORT)
-
-    # Authenticate
-    pop_conn.user(USER)
-    pop_conn.pass_(PASSWORD)
-
-    # Get message count
-    message_count, total_size = pop_conn.stat()
-    print(f'Total messages: {message_count}')
-
-    # Fetch all messages from the server
-    messages = [pop_conn.retr(i) for i in range(1, message_count + 1)]
-
-    # Combine message parts and parse them
-    messages = ["\n".join([line.decode('utf-8') for line in msg[1]]) for msg in messages]
-    messages = [parser.Parser().parsestr(msg) for msg in messages]
-
-    # Print subject and sender of each message
-    for message in messages:
-        print(f"Subject: {message['subject']}")
-        print(f"From: {message['from']}\n")
-
-    # Disconnect from the server
-    pop_conn.quit()
-
-"""
 
 
