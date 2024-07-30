@@ -33,3 +33,4 @@ Config files are stored under ``$HOME/.pymail.conf``
 - [ ] adding keyword arguments for headless instance
 - [ ] add templates
 - [ ] script / interface to create config, including adding pymail to PATH
+- [ ] add Inbox saving on the storage
