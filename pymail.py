@@ -1,4 +1,4 @@
-from mailing import MailClient
+from mailing import MailClient, clear, Credentials, Style
 import sys
 import os
 from tabulate import tabulate
@@ -21,18 +21,6 @@ example:
 """
 is_silent = not "--silent" in sys.argv
 
-def clear():
-    os.system("cls" if os.name=="nt" else "clear")
-
-class Credentials:
-    def __init__(self, login, password):
-        self.login = login
-        self.password = password
-
-    def __str__(self):
-        return f"{self.login}, ******"
-    def __repr__(self):
-        return f"{self.login}, ******"
 
 
 # read credentials
@@ -42,7 +30,7 @@ try:
         creds = Credentials(ff[0], ff[1])
     start = True
 except FileNotFoundError:
-    print("\33[38;1;41mCould not locate 'credentials.creds'! Create such file under /home/{user}/.pymail.conf and insert your credentials in this way: 'my@mail.com,Password1'\33[0m")
+    print(f"{Style.err}Could not locate 'credentials.creds'! Create such file under /home/{user}/.pymail.conf and insert your credentials in this way: 'my@mail.com,Password1'{Style.endc}")
     start = False
 
 if "--help" in sys.argv or len(sys.argv) == 1:
@@ -57,8 +45,8 @@ if start:
                 "port":587,
                 "timeout": 120
             },
-            "pop3":{
-                "host": "pop.gmail.com",
+            "imap":{
+                "server": "imap.gmail.com",
                 "port":995
                 }
             }
@@ -68,7 +56,8 @@ if start:
         while start:
             try:
                 clear()
-                print(f"\33[3mLogged as {m.credentials.login}, Inbox: {m.get_number_of_mails()}\33[0m")
+                unread = m._get_number_of_mails()["unread"]
+                print(f"{Style.i}Logged as {m.credentials.login}, {Style.b if unread else ''}Unread: {unread}{Style.endc}")
                 print("- NEW MAIL 0\n- SHOW FAVORITES 1\n- ADD TO FAVORITES 2\n- REMOVE FROM FAVORITES 3\n- INBOX 4\n- EXIT 9")
                 inp = input(">>> ")
                 match inp.upper():
@@ -82,7 +71,7 @@ if start:
                         m.remove_from_favorites()
                     case "4" | "INBOX":
                         m.show_inbox()
-                    case "9" | "EXIT":
+                    case "9" | "Q" | "EXIT":
                         break
                     case _:
                         print("Not supported input")
@@ -92,12 +81,12 @@ if start:
                 break
     # list facorites
     elif "--list-favorites" in sys.argv:
-        m = MailClient(creds, config, initialize_smtp=False, initialize_pop3=False, silent=is_silent)
+        m = MailClient(creds, config, initialize_smtp=False, initialize_imap=False, silent=is_silent)
         data = m._fetch_all_favorites()
         print(tabulate(data, headers="keys"))
     # headless
     else:
-        m = MailClient(creds, config, silent=is_silent, initialize_pop3=False)
+        m = MailClient(creds, config, silent=is_silent, initialize_imap=False)
         try:
             # set to
             if sys.argv[1].startswith("-f"):
