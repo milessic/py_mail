@@ -3,7 +3,6 @@ import json
 import re
 import readline
 from tabulate import tabulate
-import poplib
 import imaplib
 from email import message_from_bytes
 from email.header import decode_header, make_header
@@ -37,15 +36,14 @@ class Credentials:
         return f"{self.login}, ******"
 
 class MailClient:
-    def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_pop3:bool=True):
+    def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_imap:bool=True):
         self.messages = {}
         self.message_counts = {}
         self.debug = False
         self.silent = silent
         self.initialize_smtp = initialize_smtp 
-        self.initialize_pop3 = False   #initialize_pop3
-        self.initialize_imap = initialize_pop3
-        self.initialize_credentials = self.initialize_smtp or self.initialize_pop3
+        self.initialize_imap = initialize_imap
+        self.initialize_credentials = self.initialize_smtp or self.initialize_imap
         if self.initialize_credentials:
             if not silent:
                 clear()
@@ -69,21 +67,11 @@ class MailClient:
         # setup IMAP
         if self.initialize_imap:
             try:
-                self.i = imaplib.IMAP4_SSL("imap.gmail.com")
+                self.i = imaplib.IMAP4_SSL(self.config["imap"]["server"])
                 self.i.login(user=self.credentials.login, password=self.credentials.password)
             except Exception as e:
                 print(f"{Style.err}Error connecting to IMAP server! {type(e).__name__}: {e}{Style.endc}")
                 input("Press ENTER to continue")
-        # setup pop3
-        if initialize_pop3:
-            try:
-                self.p = poplib.POP3_SSL(self.config["pop3"]["host"], self.config["pop3"]["port"])
-                self.p.user(self.credentials.login)
-                self.p.pass_(self.credentials.password)
-            except Exception as e:
-                print(f"""server: '{self.config["pop3"]["server"]}'.""")
-                raise AssertionError(f"{Style.err}Error when connecting to POP3 server! {type(e).__name__}: {e}{Style.endc}")
-
         # Open Favorites
         self.favorites_file = f"{os.getenv('HOME')}/.pymail_favorites.json"
         try:
@@ -232,10 +220,10 @@ class MailClient:
 
     def show_inbox(self):
         clear()
-        print("=== INBOX")
+        print(f"=== INBOX {Style.b if self.message_counts['unread'] else Style.endc}{self.message_counts['unread']}{Style.endc} unread of {self.message_counts['all']}")
         self._fetch_emails_imap()
         print(tabulate(self.messages, headers="keys"))
-        inbox_input = input("[0] Read {Num} - [1] Reply {Num} - [2] Reload - [9] Exit\n>>> ")
+        inbox_input = input("[0] Read {Num} - [1] Reply {Num} - [2] Reload [3] Delete {num} - [9] Exit\n>>> ")
         match inbox_input.upper():
             case "0" | "READ":
                 self.not_implemented()
@@ -245,6 +233,9 @@ class MailClient:
                 self.show_inbox()
             case "2" | "RELOAD":
                 self._fetch_emails_imap(hard=True)
+                self.show_inbox()
+            case "3" | "DELETE":
+                self.not_implemented()
                 self.show_inbox()
             case "9" | "EXIT":
                 return

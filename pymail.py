@@ -45,8 +45,8 @@ if start:
                 "port":587,
                 "timeout": 120
             },
-            "pop3":{
-                "host": "pop.gmail.com",
+            "imap":{
+                "server": "imap.gmail.com",
                 "port":995
                 }
             }
@@ -81,12 +81,12 @@ if start:
                 break
     # list facorites
     elif "--list-favorites" in sys.argv:
-        m = MailClient(creds, config, initialize_smtp=False, initialize_pop3=False, silent=is_silent)
+        m = MailClient(creds, config, initialize_smtp=False, initialize_imap=False, silent=is_silent)
         data = m._fetch_all_favorites()
         print(tabulate(data, headers="keys"))
     # headless
     else:
-        m = MailClient(creds, config, silent=is_silent, initialize_pop3=False)
+        m = MailClient(creds, config, silent=is_silent, initialize_imap=False)
         try:
             # set to
             if sys.argv[1].startswith("-f"):
