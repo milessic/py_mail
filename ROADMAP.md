@@ -10,7 +10,8 @@ This is the roadmap for pymail, things I would like to do
 - [ ] displaying inbox
   - [x] display mails
   - [ ] implement pagination
-- [ ] reading mails
+- [x] reading mails
+- [ ] setting mail as SEEN
   - [ ] one mail
   - [ ] multiple mails
   - [ ] all mails
