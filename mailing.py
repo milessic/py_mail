@@ -7,6 +7,7 @@ import imaplib
 from email import message_from_bytes
 from email.header import decode_header, make_header
 import smtplib 
+from email.message import Message
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
@@ -17,6 +18,7 @@ def clear():
 class Style:
     # classes
     b = "\33[1m"
+    d = "\33[2m"
     i = "\33[3m"
     err = "\33[38;1;41m"
     warn = "\33[38;1;93m"
@@ -38,6 +40,7 @@ class Credentials:
 class MailClient:
     def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_imap:bool=True):
         self.messages = {}
+        self.messages_short = {}
         self.message_counts = {}
         self.debug = False
         self.silent = silent
@@ -220,14 +223,20 @@ class MailClient:
 
     def show_inbox(self):
         clear()
-        print(f"=== INBOX {Style.b if self.message_counts['unread'] else Style.endc}{self.message_counts['unread']}{Style.endc} unread of {self.message_counts['all']}")
+        print(f"{Style.green}=== INBOX {Style.endc}{Style.b if self.message_counts['unread'] else Style.endc}{self.message_counts['unread']}{Style.endc} unread of {self.message_counts['all']}")
         self._fetch_emails_imap()
-        print(tabulate(self.messages, headers="keys"))
-        inbox_input = input("[0] Read {Num} - [1] Reply {Num} - [2] Reload [3] Delete {num} - [9] Exit\n>>> ")
-        match inbox_input.upper():
+        print(tabulate([m for m in self.messages_short], headers="keys"))
+        inbox_input = input(Style.green + "[0] Read {Num} - [1] Reply {Num} - [2] Reload [3] Delete {num} - [9] Exit\n"+ Style.b + ">>> " + Style.endc)
+        match inbox_input.split(" ")[0].upper():
             case "0" | "READ":
-                self.not_implemented()
-                self.show_inbox()
+                num = None
+                try:
+                    num = inbox_input.split(" ")[1]
+                    self.open_message(num)
+                except IndexError:
+                    input(f"{Style.err} There is no message with given num '{num}'!\nPress ENTER to continue{Style.endc} ")
+                finally:
+                    self.show_inbox()
             case "1" | "REPLY":
                 self.not_implemented()
                 self.show_inbox()
@@ -237,9 +246,103 @@ class MailClient:
             case "3" | "DELETE":
                 self.not_implemented()
                 self.show_inbox()
-            case "9" | "EXIT":
+            case "9" | "Q" | "EXIT":
                 return
+            case _:
+                self.invalid(inbox_input)
+                self.show_inbox()
     
+    def open_message(self, num):
+        clear()
+        mail = self._get_mail_via_num(num)
+        parsed_mail = self._parse_mail(mail)
+        print(parsed_mail)
+        msg_input = input(Style.green + "[0] Reply [1] Forward [2] Delete [3] Download {path} [9] Back\n" + Style.b + ">>> " + Style.endc)
+        match msg_input.upper():
+            case "0" | "REPLY":
+                self.not_implemented()
+                self.open_message(num)
+            case "1" | "FORWARD":
+                self.not_implemented()
+                self.open_message(num)
+            case "2" | "DELETE":
+                self.not_implemented()
+                self.open_message(num)
+            case "3" | "DOWNLOAD":
+                self.not_implemented()
+                self.open_message(num)
+            case "4" | "MORE":
+                if "[4] MORE" in parsed_mail:
+                    self.not_implemented()
+                    self.open_message(num)
+                else:
+                    self.invalid(msg_input)
+                    self.open_message(num)
+            case "9" | "Q" | "EXIT" | "BACK" :
+                return
+            case _:
+                self.invalid(msg_input)
+                self.open_message(num)
+
+    def _parse_mail(self, mail:dict) -> str:
+        if mail["Content-Type"].startswith("text/plain"):
+            mail_full_content = self._parse_msg_content(mail["Content"])
+            mail_content_list = self._split_message(mail_full_content)
+            mail_content = mail_content_list[0]
+            mail_content_more = mail_content_list[1]
+        else:
+            mail_content = Style.warn + f"< {re.sub(r';[\s\S]*','',mail['Content-Type'])} not supported yet! Only text/plain is supported! >" + Style.endc
+            mail_content_more = None
+
+        nl = "\n"
+        return f"""{Style.green}{Style.b}=== Subject:{Style.endc}{Style.b}{mail["Subject"]}{Style.endc}
+{Style.green}= From: {Style.endc}{mail["From"] if "From" in mail else "---"}
+{Style.green}= To:   {Style.endc}{mail["To"] if "To" in mail else "---"}
+{Style.green}= Date: {Style.endc}{mail["Date"] if "Date" in mail else "---"}
+{Style.i}----------------------------------{Style.endc}
+{mail_content}
+----------------------------------{nl + Style.green +"[4] MORE" + Style.endc if mail_content_more is not None else ""}"""
+
+
+    def _parse_msg_content(self, content: list[Message] | str | Message) -> str:
+        if isinstance(content, Message):
+            if content.is_multipart():
+                for part in content.get_payload():
+                    body = part.get_payload()
+                    # more processing?
+            else:
+                body = content.get_payload()
+            return content.get_payload()
+        elif isinstance(content, list):
+            content = ""
+            for m in content:
+                content += self._parse_msg_content(m)
+        elif isinstance(content, str):
+            return content
+        else:
+            raise TypeError("TypError")
+
+    def _split_message(self, content: str | None) -> list | str:
+        if content is None:
+            return ["<Message empty or not supported!>", "None"]
+
+        pattern_1 = r"(On (\d+\/\d+\/\d+\s\d+:\d+),[\S\s]+(wrote:))[\s\S]*"
+        pattern_2 = r"(?=>)(^(>\s)[\s\S]*)"
+        content_list_raw = re.split(pattern_2, content,flags=re.M)
+        content_list_1 = re.split(pattern_1, content_list_raw[0])#, flags=re.M)
+        content_list = [content_list_1[0], "\n".join(content_list_1[1:] + content_list_raw[1:])]
+        while content_list[0].endswith("\n") or content_list[0].endswith("\r"):
+            content_list[0] = content_list[0].removesuffix("\n")
+            content_list[0] = content_list[0].removesuffix("\r")
+        return content_list
+
+    def _get_mail_via_num(self, num:int) -> dict:
+        num = int(num)
+        for msg in self.messages:
+            if msg["Num"] == num:
+                return msg
+
+
     def _get_number_of_mails(self) -> dict:
         if self.message_counts == {}:
             self._fetch_emails_imap()
@@ -255,6 +358,7 @@ class MailClient:
         
         msg_count = {"all":0, "unread":0}
         msgs = []
+        msgs_short = []
         msg_i = 0
         for i in range(1, int(messages[0]) + 1):
             #res, msg = self.i.fetch(str(i), '(RFC822 FLAGS)')  RFC822 makrs msgs Seen
@@ -274,9 +378,26 @@ class MailClient:
                     msg_from = msg["From"]
                     decoded_msg_from = str(make_header(decode_header(msg_from)))
                     decoded_msg_from = re.sub(r"(<)([\s\S])*", "", decoded_msg_from)
-                    msgs.append({"Num": msg_i,"Subject": msg_subject, "From": decoded_msg_from})
+                    msgs.append({
+                        "Num": msg_i,
+                        "Subject": msg_subject,
+                        "From": decoded_msg_from,
+                        "Content-Type": msg["Content-Type"],
+                        "Message-ID": msg["Message-ID"],
+                        "Date": msg["Date"],
+                        "Content": msg.get_payload()
+                                 }
+                    )
+                    msgs_short.append({
+                        "Num": msg_i,
+                        "Subject": msg_subject,
+                        "From": decoded_msg_from,
+                        #"Date": msg["Date"],
+                                 }
+                    )
                     msg_i += 1
         self.messages = msgs
+        self.messages_short = msgs_short
         self.message_counts = msg_count
 
     def deb(self, msg):
@@ -285,6 +406,9 @@ class MailClient:
 
     def not_implemented(self, msg:str=""):
         input(Style.warn + "Not implemented! press ENTER to continue" + msg + Style.endc)
+
+    def invalid(self, inp:str, msg:str=""):
+        input(Style.warn + f"Invalid input '{inp}'!" + msg + Style.endc)
 
 
 
