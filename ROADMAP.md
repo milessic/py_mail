@@ -24,7 +24,8 @@ This is the roadmap for pymail, things I would like to do
 - [ ] update README
 
 ## Attachments
-- [ ] attachments
+- [ ] sending attachments
+- [ ] downloading attachments
 - [ ] update README
 
 ## Headless improvements
