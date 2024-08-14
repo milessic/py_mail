@@ -11,6 +11,7 @@ pymail can be run either headless or with CLI:
 ```bash
 python3 pymail --interface [or -i] # to run CLI
 python3 pymail mail@address.com "Subject text" "Content\nWith New Lines" # to send mail
+python3 pymail mail@address.com "Subject text" "<html><body><h1>Content</h1><br>With New Lines</body></body> -c html" # to send mail in HTML format
 ```
 
 # Configuration

@@ -2,7 +2,10 @@ import re
 import json
 import re
 import readline
-from tabulate import tabulate
+try:
+    from tabulate import tabulate
+except:
+    pass
 import imaplib
 from email import message_from_bytes
 from email.header import decode_header, make_header
@@ -38,7 +41,8 @@ class Credentials:
         return f"{self.login}, ******"
 
 class MailClient:
-    def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_imap:bool=True):
+    def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_imap:bool=True, content_type:str="plain"):
+        self.content_type=content_type
         self.messages = {}
         self.messages_short = {}
         self.message_counts = {}
@@ -155,13 +159,13 @@ class MailClient:
         return data
 
 
-    def _setup_message(self, to, subject, content) -> MIMEMultipart:
+    def _setup_message(self, to, subject, content, content_type="plain") -> MIMEMultipart:
         msg = MIMEMultipart()
         msg["Subject"] = subject
         msg["To"] = to
         content = content.split(sep="\\n")
         content = "\n".join(content)
-        msg.attach(MIMEText(content, "plain"))
+        msg.attach(MIMEText(content, content_type))
         return msg
 
     def _send_mail(self, msg):

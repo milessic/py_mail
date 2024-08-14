@@ -1,21 +1,26 @@
 from mailing import MailClient, clear, Credentials, Style
 import sys
 import os
-from tabulate import tabulate
+try:
+    from tabulate import tabulate
+except:
+    pass
 creds= None
 
 help_msg = """PyMail, simple tool for SMTP mailing sending using gmail
 
 pymail [To] [Subject] [Content]
 
---interface  -i  - opens command line interface
-             -f  - use recipient from favorites
---list-favorites - list all favorites
---silent         - mailing client does not print anything execpt errors, works only for headless
+--interface  -i   - opens command line interface
+             -f   - use recipient from favorites
+--list-favorites  - list all favorites
+--silent          - mailing client does not print anything execpt errors, works only for headless
+-c [content-type] - message content type, if not provided, 'plain' is used 
 
 example:
     pymail -fdarling "I will be later" "Hello my darling!\n\nI will be home little later\nWith Love\nM"
     pymail some@mail.com "Test mail" "This is a test." --silent
+    pymail some@mail.com "Html test" "<h1>Hello</h1><br>This is <b>HTML message</b>" -c html 
 
     pymail -i < opens Command Line Interface 
 """
@@ -87,13 +92,16 @@ if start:
     # headless
     else:
         m = MailClient(creds, config, silent=is_silent, initialize_imap=False)
+        content_type = "plain"
         try:
             # set to
             if sys.argv[1].startswith("-f"):
                 recipient = m._fetch_from_favorites(sys.argv[1][2:])
             else:
                 recipient = sys.argv[1]
-            msg = m._setup_message(to=recipient, subject=sys.argv[2], content=sys.argv[3])
+            if "-c" in sys.argv:
+                content_type = sys.argv[sys.argv.index("-c") + 1] 
+            msg = m._setup_message(to=recipient, subject=sys.argv[2], content=sys.argv[3], content_type=content_type)
             m._send_mail(msg)
         except IndexError:
             print("Some arguments are missing! use --help!")
