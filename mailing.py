@@ -123,7 +123,7 @@ class MailClient:
         self.press_enter()
     
     def add_to_favorites(self):
-        print("f{self.style.deep_green}=== ADD FAVORITES{styles.endc}")
+        print(f"{self.style.deep_green}=== ADD FAVORITES{self.style.endc}")
         mail = input(f"MAIL ADDRESS >>>{self.style.endc} ")
         alias = input(f"ALIAS >>>{self.style.endc} ")
         confirm = True if input(f"Mail: '{mail}', alias: '{alias}'\nDo you confirm? y/n ").lower().startswith("y") else False
