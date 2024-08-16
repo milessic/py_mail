@@ -5,37 +5,51 @@ import json
 from getpass import getpass
 import keyring
 
-help_msg = """PyMail, simple tool for SMTP mailing sending using gmail
+help_msg = """PyMail, mail client that uses SMTP and IMAP
 
-pymail [To] [Subject] [Content]
+On first startup, config creation interface will be open, it can be re-run using --reset-config argument
+If one or more configs are missing or are invalid, config creation interface will be opened.
 
---cli        -i   - opens command line interface
-             -f   - use recipient from favorites
+--cli          -i - opens command line interface
 --command         - use command line interface
-
 --update-password - opens password-update interface
---list-favorites  - list all favorites
---silent          - mailing client does not print anything execpt errors, works only for headless
--c [content-type] - message content type, if not provided, 'plain' is used 
 --where-is-config - prints where config file is stored
 --test            - run self-tests
+--reset-config    - resets config and opens config setup
 
-example:
-    pymail -fdarling "I will be later" "Hello my darling!\n\nI will be home little later\nWith Love\nM"
+== COMMAND LINE Specific
+pymail [To] [Subject] [Content]
+             -f   - use recipient from favorites
+--list-favorites  - list all favorites
+--silent          - mailing client does not print anything execpt errors, works only for headless
+
+             -c [content-type] - message content type, if not provided, 'plain' is used 
+             -d [directory]    - config file directory
+--password   -p [password]     - provide password inline
+
+examples:
+    pymail -fdarling "I will be later" "Hello my darling!\\n\\nI will be home little later\\nWith Love\\nM"
     pymail some@mail.com "Test mail" "This is a test." --silent
     pymail some@mail.com "Html test" "<h1>Hello</h1><br>This is <b>HTML message</b>" -c html 
+    pymail some@mail.com "password from file" "Password from file" -p "$(cat /home/someuser/pymail_password.txt)"
+    pymail some@mail.com "config from file" "Config from file" -d /home/user/custom_pymail_config.conf 
 
     pymail -i < opens Command Line Interface 
 """
 is_silent = not "--silent" in sys.argv
 
 
-cf = Config()
+if "-d" in sys.argv:
+    cf = Config(custom_directory=sys.argv[sys.argv.index("-d")+1])
+elif "--reset-config" in sys.argv:
+    cf = Config(reset_config=True)
+else:
+    cf = Config()
 
 start = True
 
 
-if "--help" in sys.argv:
+if "--help" in sys.argv or "-h" in sys.argv:
     print(help_msg)
     start = False
 
@@ -50,12 +64,17 @@ if "--update-password" in sys.argv:
 
 
 
-
-
 if start:
+    password_from_args = ""
+    if "-p" in sys.argv or "--password" in sys.argv:
+        if "-p" in sys.argv:
+            password_from_args = sys.argv[sys.argv.index("-p") + 1]
+        if "--password" in sys.argv:
+            password_from_args = sys.argv[sys.argv.index("--password") + 1]
+
     creds = Credentials( 
             cf.login,
-            cf.password
+            cf.password if not password_from_args else password_from_args
                         )
     default_interface = cf.default_client.upper()
     config = {

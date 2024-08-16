@@ -44,9 +44,12 @@ class Credentials:
         self.password = password
 
     def __str__(self):
-        return f"{self.login}, ******"
+        password_to_display = "******" if self.password else str(self.password)
+        return f"{self.login}, {password_to_display}" 
+
     def __repr__(self):
-        return f"{self.login}, ******"
+        password_to_display = "******" if self.password else str(self.password)
+        return f"{self.login}, {password_to_display}" 
 
 class MailClient:
     def __init__(self, credentials, config, silent:bool=False, initialize_smtp:bool=True, initialize_imap:bool=True, content_type:str="plain", enable_colors:bool=True):
@@ -65,6 +68,8 @@ class MailClient:
                 clear()
                 print("Loading py_mail....")
             self.credentials = credentials
+            if self.credentials.password is None:
+                raise AssertionError(f"{self.style.err}Password was None! If running from cron, please reffer to README!{self.style.endc}")
             self.config = config
         if initialize_smtp:
             # setup smtp
@@ -79,7 +84,7 @@ class MailClient:
                 self.s.login(self.credentials.login, self.credentials.password) # print("Server started!")
             except Exception as e:
                 #print(f"""server: '{self.config["smtp"]["server"]}'.""")
-                raise AssertionError(f"{e}Error when connecting to SMTP server! {type(e).__name__}: {e}{self.style.endc}")
+                raise AssertionError(f"{self.style.err}Error when connecting to SMTP server! {type(e).__name__}: {e}{self.style.endc}")
         # setup IMAP
         if self.initialize_imap:
             try:
