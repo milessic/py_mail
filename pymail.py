@@ -1,21 +1,24 @@
 from mailing import MailClient, clear, Credentials, Style
+from config import Config
 import sys
-import os
-try:
-    from tabulate import tabulate
-except:
-    pass
-creds= None
+import json
+from getpass import getpass
+import keyring
 
 help_msg = """PyMail, simple tool for SMTP mailing sending using gmail
 
 pymail [To] [Subject] [Content]
 
---interface  -i   - opens command line interface
+--cli        -i   - opens command line interface
              -f   - use recipient from favorites
+--command         - use command line interface
+
+--update-password - opens password-update interface
 --list-favorites  - list all favorites
 --silent          - mailing client does not print anything execpt errors, works only for headless
 -c [content-type] - message content type, if not provided, 'plain' is used 
+--where-is-config - prints where config file is stored
+--test            - run self-tests
 
 example:
     pymail -fdarling "I will be later" "Hello my darling!\n\nI will be home little later\nWith Love\nM"
@@ -27,42 +30,74 @@ example:
 is_silent = not "--silent" in sys.argv
 
 
+cf = Config()
 
-# read credentials
-try:
-    with open(f"/{os.getenv('HOME')}/.pymail.conf", "r") as f:
-        ff = f.read().split(",")
-        creds = Credentials(ff[0], ff[1])
-    start = True
-except FileNotFoundError:
-    print(f"{Style.err}Could not locate 'credentials.creds'! Create such file under /home/{user}/.pymail.conf and insert your credentials in this way: 'my@mail.com,Password1'{Style.endc}")
-    start = False
+start = True
 
-if "--help" in sys.argv or len(sys.argv) == 1:
+
+if "--help" in sys.argv:
     print(help_msg)
     start = False
 
+if "--where-is-config" in sys.argv:
+    print(cf.config_path)
+    start = False
+
+if "--update-password" in sys.argv:
+    new_password = getpass(f"Input new password for user '{cf.login}' >> ")
+    keyring.set_password("pymail", cf.login, new_password)
+    exit()
+
+
+
+
 
 if start:
+    creds = Credentials( 
+            cf.login,
+            cf.password
+                        )
+    default_interface = cf.default_client.upper()
     config = {
             "smtp":{
-                "server": "smtp.gmail.com",
-                "port":587,
-                "timeout": 120
+                "server": cf.smtp_server,
+                "port":cf.smtp_port,
+                "timeout": cf.smtp_timeout
             },
             "imap":{
-                "server": "imap.gmail.com",
-                "port":995
+                "server": cf.imap_server,
+                "port": cf.imap_port
                 }
             }
+    if "--test" in sys.argv:
+        s = Style(cf.enable_colors)
+        fail_msg = s.err + "TESTS FAILED" + s.endc + "\ndetails in pymail.testlog"
+        try:
+            m = MailClient(creds, config, initialize_smtp=True, initialize_imap=True, silent=is_silent, enable_colors=cf.enable_colors)
+            pass_msg = s.green + "TESTS PASSED" + s.endc
+            del MailClient
+            print(pass_msg)
+        except Exception as e:
+            with open("pymail.testlog","a") as f:
+                f.write(f"{type(e).__name__}: {e}\n\n")
+            print(fail_msg)
+        finally:
+            exit()
+    # set interface to open
+    if "--cli" in sys.argv or "-i" in sys.argv:
+        interface = "CLI"
+    elif "--command" in sys.argv:
+        interface = "COMMAND"
+    else:
+        interface = default_interface
     # CLI
-    if "--interface" in sys.argv or "-i" in sys.argv:
-        m = MailClient(creds, config)
+    if interface == "CLI":
+        m = MailClient(creds, config, enable_colors=cf.enable_colors)
         while start:
             try:
                 clear()
                 unread = m._get_number_of_mails()["unread"]
-                print(f"{Style.i}Logged as {m.credentials.login}, {Style.b if unread else ''}Unread: {unread}{Style.endc}")
+                print(f"{m.style.i}Logged as {m.credentials.login}, {m.style.b if unread else ''}Unread: {unread}{m.style.endc}")
                 print("- NEW MAIL 0\n- SHOW FAVORITES 1\n- ADD TO FAVORITES 2\n- REMOVE FROM FAVORITES 3\n- INBOX 4\n- EXIT 9")
                 inp = input(">>> ")
                 match inp.upper():
@@ -88,10 +123,22 @@ if start:
     elif "--list-favorites" in sys.argv:
         m = MailClient(creds, config, initialize_smtp=False, initialize_imap=False, silent=is_silent)
         data = m._fetch_all_favorites()
-        print(tabulate(data, headers="keys"))
+        try:
+            from tabulate import tabulate
+            print(tabulate(data, headers="keys"))
+        except:
+            print(json.dumps(data, indent=4))
     # headless
-    else:
-        m = MailClient(creds, config, silent=is_silent, initialize_imap=False)
+    elif interface.startswith("COMMAND"):
+        try:
+            m = MailClient(creds, config, silent=is_silent, initialize_imap=False)
+        except Exception as e:
+            if "Username and Password not accepted" in str(e):
+                print("Username and password not accepted! Verify that login and password is proper! for more help, use --help!")
+                exit()
+            raise
+
+
         content_type = "plain"
         try:
             # set to
@@ -105,4 +152,7 @@ if start:
             m._send_mail(msg)
         except IndexError:
             print("Some arguments are missing! use --help!")
+    else:
+        print(help_msg)
+
 
