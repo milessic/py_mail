@@ -19,3 +19,5 @@ To find where the config file is stored, use ``--where-is-config``
 Config files are stored under ``$HOME/.pymail.conf``
 
 
+> [!WARNING]
+> If you want to run pymail from cron, ensure that cron has access to keyrings, or create a root read-only file to store the password and provide with -p 
