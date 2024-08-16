@@ -304,7 +304,8 @@ class MailClient:
             mail_content = mail_content_list[0]
             mail_content_more = mail_content_list[1]
         else:
-            mail_content = self.style.warn + f"< {re.sub(r';[\s\S]*','',mail['Content-Type'])} not supported yet! Only text/plain is supported! >" + self.style.endc
+            pattern = r';[\s\S]*'
+            mail_content = self.style.warn + f"< {re.sub(pattern,'',mail['Content-Type'])} not supported yet! Only text/plain is supported! >" + self.style.endc
             mail_content_more = None
 
         nl = "\n"
