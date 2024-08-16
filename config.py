@@ -6,9 +6,14 @@ import keyring
 
 
 class Config:
-    def __init__(self):
-        self.config_path = f"{os.getenv('HOME')}/.pymail.conf"
+    def __init__(self, custom_directory:str|None=None, reset_config:bool=False):
+        if custom_directory is None:
+            self.config_path = f"{os.getenv('HOME')}/.pymail.conf"
+        else:
+            self.config_path = f"{custom_directory}"
         self.c = configparser.ConfigParser()
+        if reset_config:
+            self.setup_new_config()
         try:
             self.c.read(self.config_path)
             self.login
