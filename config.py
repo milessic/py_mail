@@ -31,9 +31,10 @@ class Config:
     def setup_new_config(self):
         print("=== PY_MAIL CONFIGURATION")
         while True:
+            break
+            config_path = "HOME"
             try:
                 #config_path = input("provide config path or leave empty for HOME [HOME] >> ") # TODO in some future
-                config_path = "HOME"
                 if not config_path or config_path.upper() == "HOME":
                     home_path = os.getenv("HOME")
                     self.config_path = Path(home_path, ".pymail.conf")
