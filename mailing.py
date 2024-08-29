@@ -84,7 +84,10 @@ class MailClient:
                 self.s.login(self.credentials.login, self.credentials.password) # print("Server started!")
             except Exception as e:
                 #print(f"""server: '{self.config["smtp"]["server"]}'.""")
-                raise AssertionError(f"{self.style.err}Error when connecting to SMTP server! {type(e).__name__}: {e}{self.style.endc}")
+                add_e = ""
+                if "No address associated with hostname" in str(e):
+                    add_e = "Check your internet connection or server configuration!"
+                raise AssertionError(f"{self.style.err}Error when connecting to SMTP server! {type(e).__name__}: {e}{self.style.endc}\n{self.style.warn}{add_e}{self.style.endc}")
         # setup IMAP
         if self.initialize_imap:
             try:
