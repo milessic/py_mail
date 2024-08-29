@@ -163,6 +163,7 @@ if start:
         content_type = "plain"
         try:
             # set to
+            msg_content = sys.argv[3]
             if sys.argv[1].startswith("-f"):
                 recipient = m._fetch_from_favorites(sys.argv[1][2:])
             else:
@@ -176,13 +177,13 @@ if start:
                     continue
                 if arg == "-o":
                     with open(sys.argv[i + 1],"r") as f:
-                        msg = f.read()
+                        msg_content = f.read()
+                    continue
                 elif arg.startswith("-o"):
                     with open(arg[2:], "r") as f:
-                        msg = f.read()
-                else:
-                    msg = sys.argv[3]
-            msg = m._setup_message(to=recipient, subject=sys.argv[2], content=sys.argv[3], content_type=content_type)
+                        msg_content = f.read()
+                        continue
+            msg = m._setup_message(to=recipient, subject=sys.argv[2], content=msg_content, content_type=content_type)
             m._send_mail(msg)
         except IndexError:
             print("Some arguments are missing! use --help!")
