@@ -20,6 +20,7 @@ If one or more configs are missing or are invalid, config creation interface wil
 == COMMAND LINE Specific
 pymail [To] [Subject] [Content]
              -f   - use recipient from favorites
+             -o   - read contents from file
 --list-favorites  - list all favorites
 --silent          - mailing client does not print anything execpt errors, works only for headless
 
@@ -147,6 +148,7 @@ if start:
             print(tabulate(data, headers="keys"))
         except:
             print(json.dumps(data, indent=4))
+        exit()
     # headless
     elif interface.startswith("COMMAND"):
         try:
@@ -165,8 +167,21 @@ if start:
                 recipient = m._fetch_from_favorites(sys.argv[1][2:])
             else:
                 recipient = sys.argv[1]
-            if "-c" in sys.argv:
-                content_type = sys.argv[sys.argv.index("-c") + 1] 
+            for i, arg in enumerate(sys.argv):
+                if arg == "-c":
+                    content_type = sys.argv[i + 1] 
+                    continue
+                if arg.startswith("-c"):
+                    content_type = arg[2:]
+                    continue
+                if arg == "-o":
+                    with open(sys.argv[i + 1],"r") as f:
+                        msg = f.read()
+                elif arg.startswith("-o"):
+                    with open(arg[2:], "r") as f:
+                        msg = f.read()
+                else:
+                    msg = sys.argv[3]
             msg = m._setup_message(to=recipient, subject=sys.argv[2], content=sys.argv[3], content_type=content_type)
             m._send_mail(msg)
         except IndexError:
